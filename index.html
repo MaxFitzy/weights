@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#3b82f6">
+    <link rel="manifest" href="manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+<title>The Weighing Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+    <script>
+      // Register service worker for PWA functionality
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js');
+      }
+      
+      // Prevent scrolling on mobile when input is focused
+      document.addEventListener('DOMContentLoaded', function() {
+        const inputs = document.querySelectorAll('input');
+        inputs.forEach(input => {
+          input.addEventListener('focus', function() {
+            document.body.style.overflow = 'hidden';
+          });
+          input.addEventListener('blur', function() {
+            document.body.style.overflow = '';
+          });
+        });
+      });
+
+      // Add to Home Screen functionality for Android
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        // Store the event for later use
+        window.deferredPrompt = e;
+        
+        // Show install button
+        const installBtn = document.getElementById('installBtn');
+        if (installBtn) {
+          installBtn.classList.remove('hidden');
+        }
+      });
+    </script>
+<style>
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .player-card {
+            transition: all 0.3s ease;
+        }
+        .player-card:hover {
+            transform: translateX(5px);
+        }
+        /* Prevent zoom on iOS when input is focused */
+        @media screen and (max-width: 768px) {
+            input, select, textarea {
+                font-size: 16px !important;
+            }
+        }
+        /* Better touch targets for mobile */
+        button, input {
+            min-height: 44px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-4 max-w-md">
+<!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">The Weighing Game</h1>
+        </header>
+<!-- Game Area -->
+        <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+            <!-- Weight Input (Initially hidden) -->
+            <div id="weightSection" class="hidden mb-6">
+                <label class="block text-gray-700 font-medium mb-2">Add Target Weight</label>
+                <div class="flex">
+                    <input type="number" id="targetWeight" class="flex-1 border border-gray-300 rounded-l-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter target number" inputmode="numeric">
+                    <button id="completeBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r-lg transition duration-200">
+                        Complete
+                    </button>
+                </div>
+            </div>
+<!-- Player Input -->
+            <div id="inputSection">
+                <div class="mb-4">
+                    <label class="block text-gray-700 font-medium mb-2">Player Name</label>
+                    <input type="text" id="playerName" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter player name">
+                </div>
+                <div class="mb-6">
+                    <label class="block text-gray-700 font-medium mb-2">Guess Number</label>
+                    <input type="number" id="playerGuess" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter your guess" inputmode="numeric">
+                </div>
+<button id="addPlayerBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center">
+                    <i data-feather="plus" class="mr-2"></i> Add Player
+                </button>
+                <button id="addWeightBtn" class="w-full mt-4 bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200 hidden">
+                    Add Target Weight
+                </button>
+            </div>
+        </div>
+        <!-- Players List -->
+        <div id="playersList" class="bg-white rounded-xl shadow-md p-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Players</h2>
+            <div id="playersContainer" class="space-y-3 max-h-64 overflow-y-auto">
+                <!-- Players will be added here -->
+                <div class="text-gray-500 italic text-center py-4" id="emptyState">
+                    No players added yet
+                </div>
+            </div>
+        </div>
+        
+        <!-- Scroll Down Button (Hidden initially) -->
+        <button id="scrollDownBtn" class="fixed bottom-20 right-4 bg-blue-500 text-white p-3 rounded-full shadow-lg z-20 hidden">
+            <i data-feather="arrow-down"></i>
+        </button>
+</div>
+<!-- Results Page (Hidden initially) -->
+    <div id="resultsPage" class="fixed inset-0 bg-white z-10 flex flex-col items-center justify-center p-4 hidden">
+<div class="max-w-md w-full">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Results</h2>
+            
+            <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+                <div class="text-center mb-6">
+                    <p class="text-gray-600">Target Weight:</p>
+                    <p id="displayTargetWeight" class="text-3xl font-bold text-blue-500">0</p>
+                </div>
+                
+                <div id="resultsContainer" class="space-y-4">
+                    <!-- Results will be displayed here -->
+                </div>
+            </div>
+            <button id="newGameBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-3 px-4 rounded-lg transition duration-200">
+                Start New Game
+            </button>
+        </div>
+    </div>
+    <!-- Install Button for Android -->
+    <button id="installBtn" class="fixed bottom-4 right-4 bg-blue-500 text-white p-3 rounded-full shadow-lg z-20 hidden">
+        <i data-feather="download"></i>
+    </button>
+<script>
+        document.addEventListener('DOMContentLoaded', function() {
+            feather.replace();
+            // Install button functionality
+            const installBtn = document.getElementById('installBtn');
+            
+            installBtn.addEventListener('click', async () => {
+                if (window.deferredPrompt) {
+                    window.deferredPrompt.prompt();
+                    const { outcome } = await window.deferredPrompt.userChoice;
+                    if (outcome === 'accepted') {
+                        installBtn.classList.add('hidden');
+                    }
+                    window.deferredPrompt = null;
+                }
+            });
+const players = [];
+            let targetWeight = null;
+            
+            // DOM Elements
+            const playerNameInput = document.getElementById('playerName');
+            const playerGuessInput = document.getElementById('playerGuess');
+            const addPlayerBtn = document.getElementById('addPlayerBtn');
+            const addWeightBtn = document.getElementById('addWeightBtn');
+            const weightSection = document.getElementById('weightSection');
+            const targetWeightInput = document.getElementById('targetWeight');
+            const completeBtn = document.getElementById('completeBtn');
+            const playersContainer = document.getElementById('playersContainer');
+            const emptyState = document.getElementById('emptyState');
+            const resultsPage = document.getElementById('resultsPage');
+            const resultsContainer = document.getElementById('resultsContainer');
+            const displayTargetWeight = document.getElementById('displayTargetWeight');
+            const newGameBtn = document.getElementById('newGameBtn');
+            
+            // Add Player
+            addPlayerBtn.addEventListener('click', function() {
+                const name = playerNameInput.value.trim();
+                const guess = parseInt(playerGuessInput.value);
+                
+                if (!name || isNaN(guess)) {
+                    alert('Please enter both a name and a valid number');
+                    return;
+                }
+                
+                players.push({ name, guess });
+                
+                // Add player to the list
+                if (emptyState) emptyState.remove();
+                
+                const playerCard = document.createElement('div');
+                playerCard.className = 'player-card bg-gray-50 p-4 rounded-lg border border-gray-200 fade-in';
+                playerCard.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <span class="font-medium">${name}</span>
+                        <span class="text-gray-500">Guess added</span>
+                    </div>
+                `;
+                playersContainer.appendChild(playerCard);
+                
+                // Clear inputs
+                playerNameInput.value = '';
+                playerGuessInput.value = '';
+                playerNameInput.focus();
+                
+                // Show add weight button if we have at least one player
+                if (players.length >= 1) {
+                    addWeightBtn.classList.remove('hidden');
+                }
+            });
+            
+            // Show weight input
+            addWeightBtn.addEventListener('click', function() {
+                addWeightBtn.classList.add('hidden');
+                weightSection.classList.remove('hidden');
+                targetWeightInput.focus();
+            });
+            
+            // Complete game
+            completeBtn.addEventListener('click', function() {
+                const weight = parseInt(targetWeightInput.value);
+                
+                if (isNaN(weight)) {
+                    alert('Please enter a valid target weight');
+                    return;
+                }
+                
+                targetWeight = weight;
+                calculateResults();
+            });
+            // Calculate and display results
+            function calculateResults() {
+                // Calculate differences
+                const playersWithDifferences = players.map(player => {
+                    return {
+                        ...player,
+                        difference: Math.abs(player.guess - targetWeight)
+                    };
+                });
+                
+                // Sort by closest guess
+                playersWithDifferences.sort((a, b) => a.difference - b.difference);
+                
+                // Display results
+                displayTargetWeight.textContent = targetWeight;
+                
+                resultsContainer.innerHTML = '';
+                playersWithDifferences.forEach((player, index) => {
+                    const resultCard = document.createElement('div');
+                    resultCard.className = 'player-card bg-gray-50 p-4 rounded-lg border border-gray-200 fade-in';
+                    
+                    let medal = '';
+                    if (index === 0) medal = '🥇';
+                    if (index === 1) medal = '🥈';
+                    if (index === 2) medal = '🥉';
+                    
+                    resultCard.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <span class="font-medium">${player.name}</span>
+                                <span class="ml-2">${medal}</span>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-sm text-gray-500">Guessed: ${player.guess}</div>
+                                <div class="font-medium ${index === 0 ? 'text-green-500' : 'text-gray-700'}">
+                                    ${player.difference} away
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    resultsContainer.appendChild(resultCard);
+                });
+                
+                // Show results page
+                resultsPage.classList.remove('hidden');
+                
+                // Update scroll button for results page after a short delay
+                setTimeout(updateResultsScrollButton, 100);
+            }
+// New game
+            newGameBtn.addEventListener('click', function() {
+                // Reset everything
+                players.length = 0;
+                targetWeight = null;
+                
+                // Clear inputs
+                playerNameInput.value = '';
+                playerGuessInput.value = '';
+                targetWeightInput.value = '';
+                
+                // Reset UI
+                playersContainer.innerHTML = `
+                    <div class="text-gray-500 italic text-center py-4" id="emptyState">
+                        No players added yet
+                    </div>
+                `;
+                addWeightBtn.classList.add('hidden');
+                weightSection.classList.add('hidden');
+                
+                // Hide results page
+                resultsPage.classList.add('hidden');
+                
+                // Focus on first input
+                playerNameInput.focus();
+            });
+            // Allow pressing Enter in inputs
+            playerNameInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    playerGuessInput.focus();
+                }
+            });
+            
+            playerGuessInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    addPlayerBtn.click();
+                }
+            });
+            
+            targetWeightInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    completeBtn.click();
+                }
+            });
+            
+            // Prevent form submission on Enter
+            document.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && e.target.tagName !== 'INPUT') {
+                    e.preventDefault();
+                }
+            });
+            // Scroll down button functionality
+            const scrollDownBtn = document.getElementById('scrollDownBtn');
+            
+            function updateScrollButtonVisibility() {
+                const playersList = document.getElementById('playersList');
+                const viewportHeight = window.innerHeight;
+                const listBottom = playersList.getBoundingClientRect().bottom;
+                
+                if (listBottom > viewportHeight) {
+                    scrollDownBtn.classList.remove('hidden');
+                } else {
+                    scrollDownBtn.classList.add('hidden');
+                }
+            }
+            
+            scrollDownBtn.addEventListener('click', function() {
+                const playersList = document.getElementById('playersList');
+                playersList.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            });
+            
+            // Update scroll button visibility on player addition and window resize
+            window.addEventListener('resize', updateScrollButtonVisibility);
+            
+            // Add scroll functionality for results page
+            function updateResultsScrollButton() {
+                const resultsContainer = document.getElementById('resultsContainer');
+                const viewportHeight = window.innerHeight;
+                const resultsBottom = resultsContainer.getBoundingClientRect().bottom;
+                
+                if (resultsBottom > viewportHeight) {
+                    scrollDownBtn.classList.remove('hidden');
+                } else {
+                    scrollDownBtn.classList.add('hidden');
+                }
+            }
+            
+            // Override scroll button behavior when results page is visible
+            scrollDownBtn.addEventListener('click', function() {
+                if (resultsPage.classList.contains('hidden')) {
+                    const playersList = document.getElementById('playersList');
+                    playersList.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                } else {
+                    const resultsContainer = document.getElementById('resultsContainer');
+                    resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                }
+            });
+// Add vibration feedback for mobile
+            if ('vibrate' in navigator) {
+                addPlayerBtn.addEventListener('click', function() {
+                    navigator.vibrate(50);
+                });
+                completeBtn.addEventListener('click', function() {
+                    navigator.vibrate(50);
+                });
+                newGameBtn.addEventListener('click', function() {
+                    navigator.vibrate(50);
+                });
+                scrollDownBtn.addEventListener('click', function() {
+                    navigator.vibrate(30);
+                });
+            }
+            // Initial check and update on player additions
+            updateScrollButtonVisibility();
+            // Override the player addition to include scroll button update
+            const originalAddPlayer = addPlayerBtn.onclick;
+            addPlayerBtn.onclick = function() {
+                if (originalAddPlayer) originalAddPlayer.call(this);
+                // Update scroll button after a short delay to allow DOM update
+                setTimeout(updateScrollButtonVisibility, 100);
+            };
+            
+            // Update scroll button when results page is shown or resized
+            window.addEventListener('resize', function() {
+                if (!resultsPage.classList.contains('hidden')) {
+                    updateResultsScrollButton();
+                } else {
+                    updateScrollButtonVisibility();
+                }
+            });
+});
+    </script>
+</body>
+</html>
